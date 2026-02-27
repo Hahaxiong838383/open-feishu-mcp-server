@@ -192,6 +192,30 @@ npx @modelcontextprotocol/inspector@latest
    - 保存配置后会自动打开飞书 OAuth 登录页面
    - 完成授权即可使用飞书相关功能
 
+
+### 🧩 全量 OpenAPI 通用封装
+
+- 新增 `feishu_openapi_call` 万能工具：通过 `method + path + query + body` 直接调用任意飞书 `open-apis` 接口。
+- 对于尚未做成专用 MCP 工具的能力（IM、日历、审批、人事、招聘等），可先通过该工具无缝使用。
+- 路径同时支持 `/im/v1/messages` 与 `/open-apis/im/v1/messages` 两种写法。
+
+#### 可操作性验证（用户授权）
+
+已提供本地验证脚本：
+
+```bash
+node --experimental-strip-types scripts/verify-openapi-capabilities.ts
+```
+
+该脚本会模拟 `user_access_token` 并校验以下能力均可通过 `feishu_openapi_call` 正常发起请求（含读写/增删改查）：
+
+- **知识库（Wiki）**：空间列表、创建、更新、删除
+- **电子表格（Sheets）**：读取元数据、写入单元格
+- **多维表格（Bitable）**：记录创建、查询、更新、删除
+- **画板（Board）**：白板读取、创建、更新、删除
+
+> 注意：是否最终调用成功还取决于飞书应用申请到的权限范围（scope）和目标资源本身的访问权限。
+
 ## 🔐 访问控制
 
 - **身份验证**：使用飞书 OAuth 进行用户身份验证
