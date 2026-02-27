@@ -3,21 +3,6 @@ import { McpAgent } from 'agents/mcp';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@larksuiteoapi/node-sdk';
 import { env } from 'cloudflare:workers';
-
-import { FeishuHandler } from './feishu-handler';
-import { Props, refreshUpstreamAuthToken } from './utils';
-import { oapiHttpInstance } from './utils/http-instance';
-import { RecallTool } from './mcp-tool/document-tool/recall';
-import { blockTreeTool, docxBlockBatchDelete, docxBlockPatch, docxInsertImage, docxInsertFile, docxMarkdownImport, docxV1BlockTypeSchemaGet, docxV1DocumentBlockChildrenCreateSimple } from './tools/document';
-import { mediaUploadTool } from './tools/drive';
-import { z } from 'zod';
-import { driveCommentBatch, driveCommentList,driveCommentPatch,driveCommentCreate,driveCommentGet } from './tools/drive/comment';
-import { driveReplyList, driveReplyUpdate, driveReplyDelete } from './tools/drive/reply';
-import { wikiNodeInfoGet } from './tools/wiki/space';
-import { sheetRangeRead, sheetInfoGet,sheetPatch, sheetRangeWrite } from './tools/sheet';
-import { suiteSearch } from './tools/suite';
-import { docxMarkdownInsert } from './tools/document';
-
 import {
   registerTools,
   // authen
@@ -78,7 +63,12 @@ import {
   updateSpreadsheet,
 } from 'feishu-tools';
 
-import { GenTools } from './mcp-tool/tools/zh/gen-tools';
+import { FeishuHandler } from './feishu-handler';
+import { Props, refreshUpstreamAuthToken } from './utils';
+import { oapiHttpInstance } from './utils/http-instance';
+import { feishuOpenApiCall } from './tools/openapi';
+
+
 
 const client = new Client({
   appId: env.FEISHU_APP_ID,
@@ -100,7 +90,7 @@ export class MyMCP extends McpAgent<Props, Env> {
     const context = {
       client: client,
       getUserAccessToken: () => this.props.accessToken as string,
-    }
+    };
 
     // 批量注册所有 feishu-tools 工具
     const allTools = [
@@ -160,6 +150,8 @@ export class MyMCP extends McpAgent<Props, Env> {
       updateSheetProtection,
       updateSheetViewSettings,
       updateSpreadsheet,
+      // universal open api
+      feishuOpenApiCall,
     ];
 
     registerTools(this.server, allTools, context);

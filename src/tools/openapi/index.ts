@@ -1,0 +1,1 @@
+export { feishuOpenApiCall } from './call';
