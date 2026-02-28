@@ -104,7 +104,14 @@ wrangler kv namespace create "OAUTH_KV"
 
 #### 步骤 3: 更新配置文件
 
-使用步骤 2 中获得的 KV ID 更新 `wrangler.toml` 文件中的 KV 命名空间配置。
+使用步骤 2 中获得的 KV ID 更新 `wrangler.jsonc` 文件中的 KV 命名空间配置。
+
+> ⚠️ **必做（否则 OAuth 会失败）**
+>
+> 1. 先执行：`npx wrangler kv namespace create OAUTH_KV`
+> 2. 将输出中的 `id` 回填到 `wrangler.jsonc` 的 `kv_namespaces[0].id`
+>
+> 仓库中的默认 `id` 仅为示例，不能直接用于你的账号环境。
 
 #### 步骤 4: 部署服务器
 
@@ -155,8 +162,12 @@ npx @modelcontextprotocol/inspector@latest
 ```
 
 **连接地址**：
-- 生产环境：`https://feishu-mcp-server.<your-subdomain>.workers.dev/sse`
-- 本地环境：`http://localhost:8788/sse`
+- 推荐（Streamable HTTP）：`/mcp`
+- 兼容（Legacy SSE）：`/sse`
+
+示例：
+- 生产环境：`https://feishu-mcp-server.<your-subdomain>.workers.dev/mcp`
+- 本地环境：`http://localhost:8788/mcp`
 
 ### 使用 Cursor
 
@@ -170,7 +181,7 @@ npx @modelcontextprotocol/inspector@latest
 {
   "mcpServers": {
     "feishu": {
-      "url": "http://localhost:8788/sse"
+      "url": "http://localhost:8788/mcp"
     }
   }
 }
@@ -182,11 +193,12 @@ npx @modelcontextprotocol/inspector@latest
    - 打开 ChatWise 设置界面
    - 导航到工具选项
    - 新增命令行输入输出（stdio）
-   - 命令：`npx -y mcp-remote ${URL}`
+   - 命令：`npx -y mcp-remote http://localhost:8788/mcp`
 
 2. **连接地址**：
-   - 本地：`http://localhost:8788/sse`
-   - 生产：`https://feishu-mcp-server.<your-subdomain>.workers.dev/sse`
+   - 主推荐（/mcp）：`http://localhost:8788/mcp`
+   - 兼容（/sse）：`http://localhost:8788/sse`
+   - 生产环境：`https://feishu-mcp-server.<your-subdomain>.workers.dev/mcp`
 
 3. **首次使用**：
    - 保存配置后会自动打开飞书 OAuth 登录页面
