@@ -162,7 +162,46 @@ async function resolveAndRefresh(
 
 // ── 飞书 Auth 端点 ──
 
-const FEISHU_SCOPE = 'wiki:wiki wiki:wiki:readonly wiki:node:read drive:drive drive:file drive:file:upload auth:user.id:read offline_access task:task:read docs:document:import docs:document.media:upload docx:document docx:document:readonly docx:document.block:convert';
+// OAuth scope：空格分隔，包含 offline_access 以支持 refresh_token
+// 若飞书提示某项 scope 无效，去应用后台申请/开通或从此处移除
+const FEISHU_SCOPE = [
+  'offline_access',
+
+  // Contacts / user info
+  'contact:user.base:readonly',
+  'contact:contact:readonly',
+
+  // IM (bot/messages)
+  'im:message',
+  'im:message:readonly',
+  'im:chat',
+  'im:chat:readonly',
+
+  // Drive / Docs / Sheets
+  'drive:drive',
+  'drive:drive:readonly',
+  'drive:file',
+  'drive:file:readonly',
+
+  // Wiki
+  'wiki:space',
+  'wiki:space:readonly',
+  'wiki:node',
+  'wiki:node:readonly',
+
+  // Bitable / Base (多维表格)
+  'bitable:app',
+  'bitable:app:readonly',
+  'bitable:record:write',
+  'bitable:record:readonly',
+  'base:field:read',
+  'base:record:write',
+  'base:record:read',
+
+  // Tasks
+  'task:task',
+  'task:task:readonly',
+].join(' ');
 
 const ACTIONS_NEXT_PREFIX = 'ACTIONS_NEXT::';
 
@@ -190,7 +229,8 @@ export async function handleActionsAuth(request: Request, env: ActionsEnv) {
     upstream_url: 'https://open.feishu.cn/open-apis/authen/v1/authorize',
     client_id: env.FEISHU_APP_ID,
     redirect_uri: callbackUrl.href,
-    scope: FEISHU_SCOPE,
+    // scope 与官方 feishu-mcp-server 一致（已验证可用）
+    scope: 'wiki:wiki wiki:wiki:readonly wiki:node:read drive:drive drive:file drive:file:upload auth:user.id:read offline_access task:task:read docs:document:import docs:document.media:upload docx:document docx:document:readonly docx:document.block:convert',
     state,
   });
   return Response.redirect(authorizeUrl, 302);
@@ -824,6 +864,20 @@ export async function handleActionsOpenApi(
   env: ActionsEnv,
   origin = '*',
 ) {
+  // 强制 OAuth：无 Bearer token 时返回 401 + WWW-Authenticate，让 ChatGPT 弹授权
+  const authHeader = request.headers.get('Authorization') || '';
+  if (!authHeader.toLowerCase().startsWith('bearer ')) {
+    return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }, null, 2), {
+      status: 401,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'WWW-Authenticate': 'Bearer',
+        'Cache-Control': 'no-store',
+        'Access-Control-Allow-Origin': origin,
+      },
+    });
+  }
+
   // 解析请求体：支持 {method,path,...} 和 {args:{method,path,...}} 两种格式
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) {
@@ -850,10 +904,74 @@ export async function handleActionsOpenApi(
     normalizedPath = `/open-apis${normalizedPath}`;
   }
 
-  // 获取 token
+  // 路径纠错映射：GPT 常猜错的路径 → 正确路径
+  const PATH_CORRECTIONS: Record<string, string> = {
+    // 用户信息
+    '/open-apis/contact/v3/users/me': '/open-apis/authen/v1/user_info',
+    '/open-apis/v1/account/info': '/open-apis/authen/v1/user_info',
+    '/open-apis/v1/user/info': '/open-apis/authen/v1/user_info',
+    '/open-apis/user/v1/info': '/open-apis/authen/v1/user_info',
+    '/open-apis/users/me': '/open-apis/authen/v1/user_info',
+    '/open-apis/me': '/open-apis/authen/v1/user_info',
+    // 知识库
+    '/open-apis/knowledge/v1/spaces': '/open-apis/wiki/v2/spaces',
+    '/open-apis/knowledge/v2/spaces': '/open-apis/wiki/v2/spaces',
+    '/open-apis/wiki/v1/spaces': '/open-apis/wiki/v2/spaces',
+    '/open-apis/spaces': '/open-apis/wiki/v2/spaces',
+    // 文档
+    '/open-apis/docs/v1/documents': '/open-apis/docx/v1/documents',
+    '/open-apis/document/v1/documents': '/open-apis/docx/v1/documents',
+    // 消息
+    '/open-apis/messages/v1/messages': '/open-apis/im/v1/messages',
+    '/open-apis/message/v1/messages': '/open-apis/im/v1/messages',
+    '/open-apis/chat/v1/chats': '/open-apis/im/v1/chats',
+    '/open-apis/chats': '/open-apis/im/v1/chats',
+    // 表格
+    '/open-apis/spreadsheet/v3/spreadsheets': '/open-apis/sheets/v3/spreadsheets',
+    '/open-apis/sheet/v3/spreadsheets': '/open-apis/sheets/v3/spreadsheets',
+    // 多维表格
+    '/open-apis/base/v1/apps': '/open-apis/bitable/v1/apps',
+    '/open-apis/table/v1/apps': '/open-apis/bitable/v1/apps',
+  };
+  // 精确匹配纠错
+  if (PATH_CORRECTIONS[normalizedPath]) {
+    normalizedPath = PATH_CORRECTIONS[normalizedPath];
+  } else {
+    // 前缀替换纠错：处理带路径参数的情况（如 /knowledge/v1/spaces/xxx/nodes → /wiki/v2/spaces/xxx/nodes）
+    const PREFIX_CORRECTIONS: Array<[string, string]> = [
+      ['/open-apis/knowledge/v1/', '/open-apis/wiki/v2/'],
+      ['/open-apis/knowledge/v2/', '/open-apis/wiki/v2/'],
+      ['/open-apis/wiki/v1/', '/open-apis/wiki/v2/'],
+      ['/open-apis/docs/v1/', '/open-apis/docx/v1/'],
+      ['/open-apis/document/v1/', '/open-apis/docx/v1/'],
+      ['/open-apis/messages/v1/', '/open-apis/im/v1/'],
+      ['/open-apis/message/v1/', '/open-apis/im/v1/'],
+      ['/open-apis/chat/v1/', '/open-apis/im/v1/'],
+      ['/open-apis/spreadsheet/v3/', '/open-apis/sheets/v3/'],
+      ['/open-apis/sheet/v3/', '/open-apis/sheets/v3/'],
+      ['/open-apis/base/v1/', '/open-apis/bitable/v1/'],
+      ['/open-apis/table/v1/', '/open-apis/bitable/v1/'],
+    ];
+    for (const [wrong, correct] of PREFIX_CORRECTIONS) {
+      if (normalizedPath.startsWith(wrong)) {
+        normalizedPath = correct + normalizedPath.slice(wrong.length);
+        break;
+      }
+    }
+  }
+
+  // 获取 token（失败时返回 401 + WWW-Authenticate 触发 ChatGPT 重新授权）
   const tokenResult = await resolveAccessToken(request, env);
   if (tokenResult.error) {
-    return json({ ok: false, error: tokenResult.error }, 401, origin);
+    return new Response(JSON.stringify({ ok: false, error: tokenResult.error }, null, 2), {
+      status: 401,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'WWW-Authenticate': 'Bearer',
+        'Cache-Control': 'no-store',
+        'Access-Control-Allow-Origin': origin,
+      },
+    });
   }
 
   // 构建请求
@@ -892,6 +1010,20 @@ export async function handleActionsOpenApi(
     const parsedObj = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? parsed as Record<string, unknown>
       : null;
+
+    // 检测飞书 token 失效（code=20005），返回 401 + WWW-Authenticate 触发 ChatGPT 重新授权
+    const feishuCode = parsedObj ? Number(parsedObj.code) : NaN;
+    if (feishuCode === 20005) {
+      return new Response(JSON.stringify({ ok: false, status: 401, error: 'feishu_token_expired', feishu: parsed }, null, 2), {
+        status: 401,
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'WWW-Authenticate': 'Bearer',
+          'Cache-Control': 'no-store',
+          'Access-Control-Allow-Origin': origin,
+        },
+      });
+    }
 
     if (resp.ok) {
       const result = parsedObj && 'data' in parsedObj ? parsedObj.data : parsed;

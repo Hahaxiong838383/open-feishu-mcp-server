@@ -18,14 +18,16 @@ export function getUpstreamAuthorizeUrl({
 }: {
 	upstream_url: string;
 	client_id: string;
-	scope: string;
+	scope?: string;
 	redirect_uri: string;
 	state?: string;
 }) {
 	const upstream = new URL(upstream_url);
 	upstream.searchParams.set("client_id", client_id);
 	upstream.searchParams.set("redirect_uri", redirect_uri);
-	upstream.searchParams.set("scope", scope);
+	if (scope && scope.trim()) {
+		upstream.searchParams.set("scope", scope.trim());
+	}
 	if (state) {upstream.searchParams.set("state", state);}
 	upstream.searchParams.set("response_type", "code");
 	return upstream.href;
