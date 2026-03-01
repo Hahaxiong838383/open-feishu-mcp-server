@@ -3,71 +3,25 @@ import { McpAgent } from 'agents/mcp';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@larksuiteoapi/node-sdk';
 import { env } from 'cloudflare:workers';
+import { z } from 'zod';
 import pkg from '../package.json';
-import {
-  registerTools,
-  // authen
-  getUserInfo,
-  // docx
-  createDocument,
-  getDocument,
-  getDocumentRawContent,
-  convertContentToBlocks,
-  // docx blocks
-  listDocumentBlocks,
-  createBlocks,
-  deleteBlock,
-  batchDeleteBlocks,
-  buildTextBlock,
-  buildHeading1Block,
-  buildHeading2Block,
-  buildHeading3Block,
-  buildHeading4Block,
-  buildHeading5Block,
-  buildHeading6Block,
-  buildHeading7Block,
-  buildHeading8Block,
-  buildHeading9Block,
-  buildBulletBlock,
-  buildOrderedBlock,
-  buildQuoteBlock,
-  buildEquationBlock,
-  buildTodoBlock,
-  buildCodeBlock,
-  buildDividerBlock,
-  buildCalloutBlock,
-  searchFeishuCalloutEmoji,
-  createFileBlock,
-  createImageBlock,
-  buildIframeBlock,
-  buildChatCardBlock,
-  buildGridBlock,
-  buildMermaidBlock,
-  buildGlossaryBlock,
-  buildTimelineBlock,
-  buildCatalogNavigationBlock,
-  buildInformationCollectionBlock,
-  buildCountdownBlock,
-  // drive
-  listFileComments,
-  // sheets
-  addSheet,
-  copySheet,
-  createSpreadsheet,
-  deleteSheet,
-  getSheet,
-  getSpreadsheet,
-  querySheets,
-  updateSheetMetadata,
-  updateSheetProtection,
-  updateSheetViewSettings,
-  updateSpreadsheet,
-} from 'feishu-tools';
+import type { ToolDefinition, FeishuContext } from 'feishu-tools';
 
 import { FeishuHandler } from './feishu-handler';
 import { Props, refreshUpstreamAuthToken } from './utils';
 import { oapiHttpInstance } from './utils/http-instance';
-import { feishuOpenApiCall } from './tools/openapi';
+import { allTools, mcpCoreTools } from './tools/tools_registry';
+import {
+  handleActionsTools,
+  handleActionsCall,
+  handleActionsHealthz,
+  handleActionsAuth,
+  handleActionsAuthCallback,
+  handleActionsAuthStatus,
+  handleActionsOAuthAuthorize,
+  handleActionsOAuthToken,
+  handleActionsOpenApi,
+} from './actions/bridge';
 
 const APP_VERSION = pkg.version;
 
@@ -121,6 +75,78 @@ const client = new Client({
   httpInstance: oapiHttpInstance,
 });
 
+// ── 精简描述：只保留 summary 部分 ──
+function trimDescription(desc?: string): string {
+  if (!desc) return '';
+  // feishu-tools formatDescription 用 \n\n**适用于:** 分隔
+  const cut = desc.indexOf('\n\n**适用于:**');
+  if (cut !== -1) return desc.substring(0, cut);
+  const cut2 = desc.indexOf('\n\n**不适用于:**');
+  if (cut2 !== -1) return desc.substring(0, cut2);
+  const cut3 = desc.indexOf('\n\n**使用指南:**');
+  if (cut3 !== -1) return desc.substring(0, cut3);
+  return desc;
+}
+
+// heading block_type 映射: level 1→blockType 3, level 2→blockType 4, ...
+const HEADING_BLOCK_TYPES: Record<number, string> = {
+  1: 'heading1', 2: 'heading2', 3: 'heading3',
+  4: 'heading4', 5: 'heading5', 6: 'heading6',
+  7: 'heading7', 8: 'heading8', 9: 'heading9',
+};
+
+/**
+ * 精简版工具注册：
+ * 1. 描述只保留 summary 部分
+ * 2. 去掉 outputSchema（listTools 不需要）
+ * 3. 合并 heading1-9 为一个 build_heading_block 工具
+ */
+function registerToolsLite(
+  server: McpServer,
+  tools: ToolDefinition[],
+  context: FeishuContext,
+) {
+  const headingTools = tools.filter(t => /^build_heading\d_block$/.test(t.name));
+  const otherTools = tools.filter(t => !/^build_heading\d_block$/.test(t.name));
+
+  // 合并 heading1-9 为单个工具
+  if (headingTools.length > 0) {
+    const h1 = headingTools[0];
+    server.registerTool(
+      'build_heading_block',
+      {
+        description: '构建飞书文档标题块(h1-h9)。支持富文本格式（加粗、斜体、链接等）、@用户、@文档等元素。通过 level 参数指定标题级别。',
+        inputSchema: {
+          level: z.number().int().min(1).max(9).describe('标题级别 1-9'),
+          ...(h1.inputSchema as Record<string, any>),
+        },
+      },
+      (args: any, extra: any) => {
+        const level = args.level || 1;
+        const target = headingTools.find(t => t.name === `build_heading${level}_block`);
+        if (!target) {
+          return { content: [{ type: 'text' as const, text: `Invalid heading level: ${level}` }] };
+        }
+        const { level: _level, ...restArgs } = args;
+        return target.callback(context, restArgs, extra);
+      },
+    );
+  }
+
+  // 注册其他工具（精简描述、去掉 outputSchema）
+  for (const tool of otherTools) {
+    server.registerTool(
+      tool.name,
+      {
+        description: trimDescription(tool.description),
+        inputSchema: tool.inputSchema,
+        annotations: tool.annotations,
+      },
+      (args: any, extra: any) => tool.callback(context, args, extra),
+    );
+  }
+}
+
 export class MyMCP extends McpAgent<Props, Env> {
   server = new McpServer({
     name: 'Feishu OAuth Proxy Demo',
@@ -132,67 +158,12 @@ export class MyMCP extends McpAgent<Props, Env> {
   }
 
   async init() {
-    const context = {
+    const context: FeishuContext = {
       client,
       getUserAccessToken: () => this.props.accessToken as string,
     };
 
-    const allTools = [
-      getUserInfo,
-      createDocument,
-      getDocument,
-      getDocumentRawContent,
-      convertContentToBlocks,
-      listDocumentBlocks,
-      createBlocks,
-      deleteBlock,
-      batchDeleteBlocks,
-      buildTextBlock,
-      buildHeading1Block,
-      buildHeading2Block,
-      buildHeading3Block,
-      buildHeading4Block,
-      buildHeading5Block,
-      buildHeading6Block,
-      buildHeading7Block,
-      buildHeading8Block,
-      buildHeading9Block,
-      buildBulletBlock,
-      buildOrderedBlock,
-      buildQuoteBlock,
-      buildEquationBlock,
-      buildTodoBlock,
-      buildCodeBlock,
-      buildDividerBlock,
-      buildCalloutBlock,
-      searchFeishuCalloutEmoji,
-      createFileBlock,
-      createImageBlock,
-      buildIframeBlock,
-      buildChatCardBlock,
-      buildGridBlock,
-      buildMermaidBlock,
-      buildGlossaryBlock,
-      buildTimelineBlock,
-      buildCatalogNavigationBlock,
-      buildInformationCollectionBlock,
-      buildCountdownBlock,
-      listFileComments,
-      addSheet,
-      copySheet,
-      createSpreadsheet,
-      deleteSheet,
-      getSheet,
-      getSpreadsheet,
-      querySheets,
-      updateSheetMetadata,
-      updateSheetProtection,
-      updateSheetViewSettings,
-      updateSpreadsheet,
-      feishuOpenApiCall,
-    ];
-
-    registerTools(this.server, allTools, context);
+    registerToolsLite(this.server, mcpCoreTools, context);
   }
 }
 
@@ -252,6 +223,8 @@ export default {
         endpoints: {
           mcp: '/mcp',
           sse: '/sse',
+          actions_tools: '/actions/tools',
+          actions_call: '/actions/call',
         },
       }), {
         status: 200,
@@ -261,6 +234,44 @@ export default {
           Vary: 'Origin',
         },
       });
+    }
+
+    // ── Actions Bridge ──
+    const actionsEnv = {
+      OAUTH_KV: runtimeEnv.OAUTH_KV,
+      FEISHU_APP_ID: env.FEISHU_APP_ID,
+      FEISHU_APP_SECRET: env.FEISHU_APP_SECRET,
+      ACTIONS_OAUTH_CLIENT_ID: env.ACTIONS_OAUTH_CLIENT_ID,
+      ACTIONS_OAUTH_CLIENT_SECRET: env.ACTIONS_OAUTH_CLIENT_SECRET,
+    };
+    const actionsOrigin = resolveAllowedOrigin(request, runtimeEnv.ALLOWED_ORIGINS);
+
+    if (request.method === 'GET' && requestUrl.pathname === '/actions/auth') {
+      return await handleActionsAuth(request, actionsEnv);
+    }
+    if (request.method === 'GET' && requestUrl.pathname === '/actions/auth/callback') {
+      return handleActionsAuthCallback(request, actionsEnv, actionsOrigin);
+    }
+    if (request.method === 'GET' && requestUrl.pathname === '/actions/auth/status') {
+      return handleActionsAuthStatus(actionsEnv, actionsOrigin);
+    }
+    if (request.method === 'GET' && requestUrl.pathname === '/actions/oauth/authorize') {
+      return handleActionsOAuthAuthorize(request, actionsEnv);
+    }
+    if (request.method === 'POST' && requestUrl.pathname === '/actions/oauth/token') {
+      return handleActionsOAuthToken(request, actionsEnv);
+    }
+    if (request.method === 'GET' && requestUrl.pathname === '/actions/tools') {
+      return handleActionsTools(allTools, request, actionsOrigin);
+    }
+    if (request.method === 'POST' && requestUrl.pathname === '/actions/openapi') {
+      return await handleActionsOpenApi(request, actionsEnv, actionsOrigin);
+    }
+    if (request.method === 'POST' && requestUrl.pathname === '/actions/call') {
+      return handleActionsCall(request, allTools, client, actionsEnv, actionsOrigin);
+    }
+    if (request.method === 'GET' && requestUrl.pathname === '/actions/healthz') {
+      return handleActionsHealthz(requestUrl.origin, request, actionsOrigin);
     }
 
     if (request.method === 'GET' && requestUrl.pathname === '/.well-known/mcp.json') {

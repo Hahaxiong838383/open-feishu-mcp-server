@@ -103,6 +103,19 @@ export const feishuOpenApiCall: ToolDefinition = {
     responseMode: z.enum(['json', 'text', 'binaryBase64']).optional().default('json').describe('响应解析模式，默认 json'),
   },
   callback: async (context, args) => {
+    // 防护：确保 path 和 method 是 string，防止 undefined.startsWith
+    if (args.path == null) args.path = '';
+    if (typeof args.path !== 'string') args.path = String(args.path);
+    if (args.method == null) args.method = 'GET';
+    if (typeof args.method !== 'string') args.method = String(args.method);
+
+    if (!args.path) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: '缺少 path 参数，请提供飞书 OpenAPI 路径（如 /im/v1/messages）。' }],
+      };
+    }
+
     const token = await resolveToken(context.getUserAccessToken);
 
     if (!token) {

@@ -4,7 +4,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "feishu-mcp-server",
+	"name": "feishu-mcp-server-v2",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-03-10",
 	"compatibility_flags": [
@@ -29,7 +29,7 @@
 	"kv_namespaces": [
 		{
 			"binding": "OAUTH_KV",
-			"id": "dedea7a6b9f84580a13a8be93f5ff7a6"
+			"id": "f02b877dd73444c095d48766240c3db3"
 		}
 	],
 	"ai": {
