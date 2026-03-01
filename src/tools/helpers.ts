@@ -26,6 +26,7 @@ export interface McpResult {
  * - 自动拼 `https://open.feishu.cn/open-apis/` 前缀
  * - 自动注入 Authorization header
  * - 统一返回 MCP 格式
+ * - 遇到 401 时自动重新获取 token 并重试一次
  */
 export async function feishuFetch(opts: {
   context: FeishuContext;
@@ -34,6 +35,19 @@ export async function feishuFetch(opts: {
   query?: Record<string, string | number | boolean | undefined>;
   body?: unknown;
 }): Promise<McpResult> {
+  return _feishuFetchWithRetry(opts, false);
+}
+
+async function _feishuFetchWithRetry(
+  opts: {
+    context: FeishuContext;
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    path: string;
+    query?: Record<string, string | number | boolean | undefined>;
+    body?: unknown;
+  },
+  isRetry: boolean,
+): Promise<McpResult> {
   const token = await resolveToken(opts.context.getUserAccessToken);
   if (!token) {
     return {
@@ -76,6 +90,25 @@ export async function feishuFetch(opts: {
     const parsedObj = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? parsed as Record<string, unknown>
       : null;
+
+    // 401 且未重试过 → 重新获取 token 再试一次
+    if (resp.status === 401 && !isRetry) {
+      // 飞书有时返回 200 但 code != 0 表示 token 无效，也检查
+      console.log('[feishuFetch] 收到 401，自动重试...');
+      return _feishuFetchWithRetry(opts, true);
+    }
+
+    // 飞书 API 有时返回 200 但 code=99991663/99991664 表示 token 过期
+    if (
+      !isRetry &&
+      resp.ok &&
+      parsedObj &&
+      typeof parsedObj.code === 'number' &&
+      (parsedObj.code === 99991663 || parsedObj.code === 99991664)
+    ) {
+      console.log('[feishuFetch] 飞书返回 token 过期 code:', parsedObj.code, '，自动重试...');
+      return _feishuFetchWithRetry(opts, true);
+    }
 
     if (resp.ok) {
       const result = parsedObj && 'data' in parsedObj ? parsedObj.data : parsed;

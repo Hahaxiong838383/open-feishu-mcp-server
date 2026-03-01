@@ -208,4 +208,5 @@ export type Props = {
 	email?: string
 	accessToken: string
 	refreshToken: string
+	expiresIn?: number
 }

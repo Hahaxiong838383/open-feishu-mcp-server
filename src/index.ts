@@ -153,14 +153,105 @@ export class MyMCP extends McpAgent<Props, Env> {
     version: '1.0.0',
   });
 
+  // ── 可变 token 缓存，用于自动刷新 ──
+  private _tokenCache: {
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number; // unix ms
+  } | null = null;
+
+  private _refreshPromise: Promise<string> | null = null;
+
+  /**
+   * 获取有效的 access_token：
+   * - 检查是否即将过期（提前 5 分钟刷新）
+   * - 如果 this.props 被外部 OAuth 刷新更新了，同步使用最新值
+   * - 过期时自动用 refresh_token 换取新 token
+   */
+  private async getValidAccessToken(): Promise<string> {
+    const props = this.props as unknown as Props;
+
+    // 初始化缓存（首次调用）
+    if (!this._tokenCache) {
+      this._tokenCache = {
+        accessToken: props.accessToken,
+        refreshToken: props.refreshToken,
+        // 如果没有 expiresIn，默认假设 2 小时有效期
+        expiresAt: Date.now() + (props.expiresIn || 7200) * 1000,
+      };
+    }
+
+    // 如果 this.props.accessToken 被 OAuth 层刷新了（值不同），同步过来
+    if (props.accessToken !== this._tokenCache.accessToken) {
+      this._tokenCache = {
+        accessToken: props.accessToken,
+        refreshToken: props.refreshToken,
+        expiresAt: Date.now() + (props.expiresIn || 7200) * 1000,
+      };
+    }
+
+    // 还没到刷新时间（提前 5 分钟），直接用
+    if (Date.now() < this._tokenCache.expiresAt - 5 * 60 * 1000) {
+      return this._tokenCache.accessToken;
+    }
+
+    // 需要刷新 — 避免并发重复刷新
+    if (this._refreshPromise) {
+      return this._refreshPromise;
+    }
+
+    this._refreshPromise = this._doRefresh();
+    try {
+      return await this._refreshPromise;
+    } finally {
+      this._refreshPromise = null;
+    }
+  }
+
+  private async _doRefresh(): Promise<string> {
+    const cache = this._tokenCache!;
+    console.log('[MyMCP] Token 即将过期，自动刷新中...');
+
+    const result = await refreshUpstreamAuthToken({
+      refreshToken: cache.refreshToken,
+      upstream_url: 'https://open.feishu.cn/open-apis/authen/v2/oauth/token',
+      client_id: env.FEISHU_APP_ID,
+      client_secret: env.FEISHU_APP_SECRET,
+    });
+
+    // result: [accessToken, refreshToken, expiresIn, null] | [null, Response]
+    const accessToken = result[0] as string | null;
+    if (!accessToken) {
+      console.error('[MyMCP] Token 刷新失败，继续使用旧 token');
+      return cache.accessToken;
+    }
+
+    const newRefreshToken = result[1] as string;
+    const expiresIn = result[2] as number;
+
+    console.log('[MyMCP] Token 刷新成功，有效期', expiresIn, '秒');
+    this._tokenCache = {
+      accessToken,
+      refreshToken: newRefreshToken,
+      expiresAt: Date.now() + (expiresIn || 7200) * 1000,
+    };
+
+    // 同步更新 this.props 以保持一致性
+    (this.props as any).accessToken = accessToken;
+    (this.props as any).refreshToken = newRefreshToken;
+
+    return accessToken;
+  }
+
   async handler(params: unknown, customHandler: (p: unknown, c: Client, token: string) => Promise<unknown>) {
-    return customHandler(params, client, this.props.accessToken);
+    const token = await this.getValidAccessToken();
+    return customHandler(params, client, token);
   }
 
   async init() {
     const context: FeishuContext = {
       client,
-      getUserAccessToken: () => this.props.accessToken as string,
+      getUserAccessToken: () => this.getValidAccessToken(),
     };
 
     registerToolsLite(this.server, mcpCoreTools, context);
