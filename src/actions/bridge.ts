@@ -858,6 +858,78 @@ export function handleActionsHealthz(
   return json(payload, 200, origin);
 }
 
+// ── 路径纠错引擎：版本无关，按服务名映射 ──
+function correctFeishuPath(path: string): string {
+  // 服务名别名 → [正确服务名, 正确版本号]
+  const SERVICE_ALIASES: Record<string, [string, string]> = {
+    // 文档：doc/docs/document/documents → docx v1
+    doc: ['docx', 'v1'], docs: ['docx', 'v1'], document: ['docx', 'v1'], documents: ['docx', 'v1'],
+    // 知识库：knowledge → wiki v2
+    knowledge: ['wiki', 'v2'],
+    // 消息：messages/message/chat → im v1
+    messages: ['im', 'v1'], message: ['im', 'v1'], chat: ['im', 'v1'],
+    // 表格：spreadsheet/spreadsheets/sheet → sheets v3 (v2 for values)
+    spreadsheet: ['sheets', 'v3'], spreadsheets: ['sheets', 'v3'], sheet: ['sheets', 'v3'],
+    // 多维表格：base/table/tables → bitable v1
+    base: ['bitable', 'v1'], table: ['bitable', 'v1'], tables: ['bitable', 'v1'],
+    // 任务：tasks/todo/todos → task v2
+    tasks: ['task', 'v2'], todo: ['task', 'v2'], todos: ['task', 'v2'],
+    // 用户：contact/user/users/account/auth → authen v1
+    contact: ['authen', 'v1'], user: ['authen', 'v1'], users: ['authen', 'v1'],
+    account: ['authen', 'v1'], auth: ['authen', 'v1'],
+  };
+
+  // 动作别名 → 正确的资源路径后缀（GPT 常用 /create 而非正确的资源名）
+  const ACTION_TO_RESOURCE: Record<string, Record<string, string>> = {
+    docx: { create: 'documents' },
+    im: { send: 'messages' },
+    sheets: { create: 'spreadsheets' },
+    bitable: { create: 'apps' },
+    task: { create: 'tasks' },
+  };
+
+  // 特殊精确匹配（无法通过服务名正则处理的路径）
+  const EXACT: Record<string, string> = {
+    '/open-apis/v1/account/info': '/open-apis/authen/v1/user_info',
+    '/open-apis/v1/user/info': '/open-apis/authen/v1/user_info',
+    '/open-apis/me': '/open-apis/authen/v1/user_info',
+    '/open-apis/spaces': '/open-apis/wiki/v2/spaces',
+    '/open-apis/chats': '/open-apis/im/v1/chats',
+  };
+
+  if (EXACT[path]) return EXACT[path];
+
+  // 正则提取：/open-apis/{service}/v{N}/{rest}
+  const match = path.match(/^\/open-apis\/([^/]+)\/v(\d+)\/(.*)$/);
+  if (!match) return path;
+
+  const [, service, _version, rest] = match;
+  const alias = SERVICE_ALIASES[service];
+  if (!alias) return path; // 不认识的服务名，不纠错
+
+  const [correctService, correctVersion] = alias;
+  let correctedRest = rest;
+
+  // 动作纠错：/docx/v1/create → /docx/v1/documents
+  const actionMap = ACTION_TO_RESOURCE[correctService];
+  if (actionMap) {
+    // 检查 rest 是否是一个已知的动作别名（如 "create"）
+    const firstSegment = rest.split('/')[0];
+    if (actionMap[firstSegment]) {
+      correctedRest = actionMap[firstSegment] + rest.slice(firstSegment.length);
+    }
+  }
+
+  // 特殊处理：contact/v3/users/me → authen/v1/user_info
+  if (correctService === 'authen') {
+    if (correctedRest.startsWith('users/me') || correctedRest === 'user_info' || correctedRest === 'info') {
+      return '/open-apis/authen/v1/user_info';
+    }
+  }
+
+  return `/open-apis/${correctService}/${correctVersion}/${correctedRest}`;
+}
+
 // ── /actions/openapi：直接调飞书 OpenAPI，不走 tool dispatch ──
 export async function handleActionsOpenApi(
   request: Request,
@@ -904,95 +976,10 @@ export async function handleActionsOpenApi(
     normalizedPath = `/open-apis${normalizedPath}`;
   }
 
-  // 路径纠错映射：GPT 常猜错的路径 → 正确路径
-  const PATH_CORRECTIONS: Record<string, string> = {
-    // 用户信息
-    '/open-apis/contact/v3/users/me': '/open-apis/authen/v1/user_info',
-    '/open-apis/v1/account/info': '/open-apis/authen/v1/user_info',
-    '/open-apis/v1/user/info': '/open-apis/authen/v1/user_info',
-    '/open-apis/user/v1/info': '/open-apis/authen/v1/user_info',
-    '/open-apis/users/me': '/open-apis/authen/v1/user_info',
-    '/open-apis/me': '/open-apis/authen/v1/user_info',
-    '/open-apis/user/info': '/open-apis/authen/v1/user_info',
-    '/open-apis/account/info': '/open-apis/authen/v1/user_info',
-    '/open-apis/auth/user_info': '/open-apis/authen/v1/user_info',
-    // 知识库
-    '/open-apis/knowledge/v1/spaces': '/open-apis/wiki/v2/spaces',
-    '/open-apis/knowledge/v2/spaces': '/open-apis/wiki/v2/spaces',
-    '/open-apis/wiki/v1/spaces': '/open-apis/wiki/v2/spaces',
-    '/open-apis/spaces': '/open-apis/wiki/v2/spaces',
-    // 文档 — GPT 常用 documents/doc/docs 而非 docx
-    '/open-apis/docs/v1/documents': '/open-apis/docx/v1/documents',
-    '/open-apis/document/v1/documents': '/open-apis/docx/v1/documents',
-    '/open-apis/documents/v1/documents': '/open-apis/docx/v1/documents',
-    '/open-apis/documents/v1/create': '/open-apis/docx/v1/documents',
-    '/open-apis/document/v1/create': '/open-apis/docx/v1/documents',
-    '/open-apis/docs/v1/create': '/open-apis/docx/v1/documents',
-    '/open-apis/doc/v1/documents': '/open-apis/docx/v1/documents',
-    '/open-apis/doc/v1/create': '/open-apis/docx/v1/documents',
-    // 消息
-    '/open-apis/messages/v1/messages': '/open-apis/im/v1/messages',
-    '/open-apis/message/v1/messages': '/open-apis/im/v1/messages',
-    '/open-apis/chat/v1/chats': '/open-apis/im/v1/chats',
-    '/open-apis/chats': '/open-apis/im/v1/chats',
-    '/open-apis/chat/v1/messages': '/open-apis/im/v1/messages',
-    // 表格
-    '/open-apis/spreadsheet/v3/spreadsheets': '/open-apis/sheets/v3/spreadsheets',
-    '/open-apis/sheet/v3/spreadsheets': '/open-apis/sheets/v3/spreadsheets',
-    '/open-apis/spreadsheets/v3/spreadsheets': '/open-apis/sheets/v3/spreadsheets',
-    // 多维表格
-    '/open-apis/base/v1/apps': '/open-apis/bitable/v1/apps',
-    '/open-apis/table/v1/apps': '/open-apis/bitable/v1/apps',
-    '/open-apis/tables/v1/apps': '/open-apis/bitable/v1/apps',
-    // 任务
-    '/open-apis/tasks/v2/tasks': '/open-apis/task/v2/tasks',
-    '/open-apis/todo/v2/tasks': '/open-apis/task/v2/tasks',
-    '/open-apis/todos/v2/tasks': '/open-apis/task/v2/tasks',
-  };
-  // 精确匹配纠错
-  if (PATH_CORRECTIONS[normalizedPath]) {
-    normalizedPath = PATH_CORRECTIONS[normalizedPath];
-  } else {
-    // 前缀替换纠错：处理带路径参数的情况（如 /knowledge/v1/spaces/xxx/nodes → /wiki/v2/spaces/xxx/nodes）
-    const PREFIX_CORRECTIONS: Array<[string, string]> = [
-      ['/open-apis/knowledge/v1/', '/open-apis/wiki/v2/'],
-      ['/open-apis/knowledge/v2/', '/open-apis/wiki/v2/'],
-      ['/open-apis/wiki/v1/', '/open-apis/wiki/v2/'],
-      ['/open-apis/docs/v1/', '/open-apis/docx/v1/'],
-      ['/open-apis/doc/v1/', '/open-apis/docx/v1/'],
-      ['/open-apis/document/v1/', '/open-apis/docx/v1/'],
-      ['/open-apis/documents/v1/', '/open-apis/docx/v1/'],
-      ['/open-apis/messages/v1/', '/open-apis/im/v1/'],
-      ['/open-apis/message/v1/', '/open-apis/im/v1/'],
-      ['/open-apis/chat/v1/', '/open-apis/im/v1/'],
-      ['/open-apis/spreadsheet/v3/', '/open-apis/sheets/v3/'],
-      ['/open-apis/spreadsheets/v3/', '/open-apis/sheets/v3/'],
-      ['/open-apis/sheet/v3/', '/open-apis/sheets/v3/'],
-      ['/open-apis/base/v1/', '/open-apis/bitable/v1/'],
-      ['/open-apis/table/v1/', '/open-apis/bitable/v1/'],
-      ['/open-apis/tables/v1/', '/open-apis/bitable/v1/'],
-      ['/open-apis/tasks/v2/', '/open-apis/task/v2/'],
-      ['/open-apis/todo/v2/', '/open-apis/task/v2/'],
-      ['/open-apis/todos/v2/', '/open-apis/task/v2/'],
-    ];
-    for (const [wrong, correct] of PREFIX_CORRECTIONS) {
-      if (normalizedPath.startsWith(wrong)) {
-        normalizedPath = correct + normalizedPath.slice(wrong.length);
-        break;
-      }
-    }
-    // 前缀替换后二次精确匹配（如 /documents/v1/create → /docx/v1/create → 需要再纠正为 /docx/v1/documents）
-    const POST_PREFIX_CORRECTIONS: Record<string, string> = {
-      '/open-apis/docx/v1/create': '/open-apis/docx/v1/documents',
-      '/open-apis/im/v1/send': '/open-apis/im/v1/messages',
-      '/open-apis/sheets/v3/create': '/open-apis/sheets/v3/spreadsheets',
-      '/open-apis/bitable/v1/create': '/open-apis/bitable/v1/apps',
-      '/open-apis/task/v2/create': '/open-apis/task/v2/tasks',
-    };
-    if (POST_PREFIX_CORRECTIONS[normalizedPath]) {
-      normalizedPath = POST_PREFIX_CORRECTIONS[normalizedPath];
-    }
-  }
+  // ── 路径纠错系统（版本无关） ──
+  // GPT 经常猜错飞书的服务名和路径结构，这里做自动纠正。
+  // 使用正则匹配 /open-apis/{service}/v{N}/... 提取服务名，按映射表替换。
+  normalizedPath = correctFeishuPath(normalizedPath);
 
   // 获取 token（失败时返回 401 + WWW-Authenticate 触发 ChatGPT 重新授权）
   const tokenResult = await resolveAccessToken(request, env);
