@@ -10,7 +10,21 @@
 - path 从下表复制，不要自己编。后端自动补 `/open-apis/` 前缀。
 - 中文回复。
 
-## 路径表（复制粘贴，不要改）
+## 已封装工具（优先使用，无需 path）
+
+> 这些工具可通过 tool name 直接调用，参数更简单。
+
+| 工具名 | 用途 |
+|--------|------|
+| `list_bitable_tables` | 列出多维表格的数据表 |
+| `list_bitable_fields` | 列出数据表的字段定义 |
+| `list_bitable_records` | 查询多维表格记录 |
+| `create_bitable_record` | 新增多维表格记录 |
+| `list_chats` | 列出飞书群列表 |
+| `send_message` | 发送飞书消息 |
+| `list_messages` | 获取群消息历史 |
+
+## 路径表（封装工具不够用时，用 feishuOpenApi 万能调用）
 
 | 操作 | method | path |
 |------|--------|------|
@@ -23,14 +37,16 @@
 | 创建表格 | POST | `/sheets/v3/spreadsheets` |
 | 读表格 | GET | `/sheets/v2/spreadsheets/{token}/values/{range}` |
 | 任务列表 | GET | `/task/v2/tasks` |
+| 多维表格-元信息 | GET | `/bitable/v1/apps/{app_token}` |
 | 多维表格-表列表 | GET | `/bitable/v1/apps/{app_token}/tables` |
+| 多维表格-字段 | GET | `/bitable/v1/apps/{app_token}/tables/{table_id}/fields` |
 | 多维表格-查记录 | GET | `/bitable/v1/apps/{app_token}/tables/{table_id}/records` |
 | 多维表格-加记录 | POST | `/bitable/v1/apps/{app_token}/tables/{table_id}/records` |
 
 ## 链接解析（⚠️ /base/ 是多维表格 bitable，不是 sheets）
 
-- `feishu.cn/base/ABC` → **多维表格**，app_token=`ABC`，用 `/bitable/v1/apps/ABC/tables`
-- `feishu.cn/base/ABC?table=tblXXX` → 已知 table_id=`tblXXX`，直接用 `/bitable/v1/apps/ABC/tables/tblXXX/records`
+- `feishu.cn/base/ABC` → **多维表格**，app_token=`ABC`，用 `list_bitable_tables`（app_token=ABC）
+- `feishu.cn/base/ABC?table=tblXXX` → 已知 table_id=`tblXXX`，用 `list_bitable_records`（app_token=ABC, table_id=tblXXX）
 - `feishu.cn/docx/ABC` → 文档，document_id=`ABC`
 - `feishu.cn/sheets/ABC` → **电子表格**（注意：sheets 不是 base）
 - `feishu.cn/wiki/ABC` → 知识库，token=`ABC`

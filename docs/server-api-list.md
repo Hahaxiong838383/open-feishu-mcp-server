@@ -13,8 +13,8 @@
 | 电子表格 (sheets) | 11 | 4 | 3 | ✅ |
 | 云空间 (drive) | 1 | 0 | - | - |
 | 知识库 (wiki) | 0 | 0 | 1 | ✅ |
-| 消息 (im) | 0 | 0 | 2 | ✅ |
-| 多维表格 (bitable) | 0 | 0 | 3 | ✅ |
+| 消息 (im) | 3 | 3 | 2 | ✅ |
+| 多维表格 (bitable) | 5 | 4 | 3 | ✅ |
 | 任务 (task) | 0 | 0 | 1 | ✅ |
 | 万能调用 (openapi) | 1 | 1 | - | ✅ |
 
@@ -147,9 +147,17 @@
 
 ---
 
-## 6. 消息 (im) ⚠️ 无封装工具
+## 6. 消息 (im)
 
-### 通过 OpenAPI 万能调用支持
+### 已集成
+
+| 工具名 | 用途 | allTools | mcpCore |
+|--------|------|----------|---------|
+| `listChats` | 列出群列表 | ✅ | ✅ |
+| `listMessages` | 获取消息历史 | ✅ | ✅ |
+| `sendMessage` | 发送消息 | ✅ | ✅ |
+
+### OpenAPI 路径
 
 | method | path | 用途 |
 |--------|------|------|
@@ -163,14 +171,25 @@
 
 ---
 
-## 7. 多维表格 (bitable) ⚠️ 无封装工具
+## 7. 多维表格 (bitable)
 
-### 通过 OpenAPI 万能调用支持
+### 已集成
+
+| 工具名 | 用途 | allTools | mcpCore |
+|--------|------|----------|---------|
+| `getBitableApp` | 获取多维表格元信息 | ✅ | ❌ |
+| `listBitableTables` | 列出数据表 | ✅ | ✅ |
+| `listBitableFields` | 列出字段定义 | ✅ | ✅ |
+| `listBitableRecords` | 查询记录 | ✅ | ✅ |
+| `createBitableRecord` | 新增记录 | ✅ | ✅ |
+
+### OpenAPI 路径
 
 | method | path | 用途 |
 |--------|------|------|
 | GET | `/bitable/v1/apps/{app_token}` | 元信息 |
 | GET | `/bitable/v1/apps/{app_token}/tables` | 数据表列表 |
+| GET | `/bitable/v1/apps/{app_token}/tables/{table_id}/fields` | 字段列表 |
 | GET | `/bitable/v1/apps/{app_token}/tables/{table_id}/records` | 查记录 |
 | POST | `/bitable/v1/apps/{app_token}/tables/{table_id}/records` | 新增记录 |
 
@@ -210,9 +229,9 @@
 ```
 用户请求
   │
-  ├─ MCP 协议 → mcpCoreTools (13 个精简工具)
+  ├─ MCP 协议 → mcpCoreTools (20 个精简工具)
   │
-  └─ GPT Actions → allTools (52 个完整工具)
+  └─ GPT Actions → allTools (60 个完整工具)
        │
        ├─ 已封装工具 → 直接调用
        │
@@ -225,16 +244,16 @@
 
 ## 扩展建议
 
-feishu-tools 包当前缺失以下服务的封装工具：
+以下服务尚无封装工具，可按需扩展：
 
 | 服务 | 优先级 | 原因 |
 |------|--------|------|
-| 多维表格 (bitable) | 高 | 用户高频使用，当前靠 OpenAPI 万能调用 |
-| 消息 (im) | 高 | 发消息/读消息需求频繁 |
 | 知识库 (wiki) | 中 | 有路径但无封装 |
 | 任务 (task) | 中 | 结构简单，封装价值有限 |
 | 审批 (approval) | 低 | 当前无任何支持 |
 | 日历 (calendar) | 低 | 当前无任何支持 |
 | 考勤 (attendance) | 低 | 当前无任何支持 |
+
+**已完成**：多维表格 (bitable) 和消息 (im) 已封装为专用工具。
 
 **当前策略**：缺失封装的服务均可通过 `feishu_openapi_call` 万能工具 + 路径纠错引擎覆盖，功能上不受阻。封装工具的价值在于提供参数校验和更好的调用体验。

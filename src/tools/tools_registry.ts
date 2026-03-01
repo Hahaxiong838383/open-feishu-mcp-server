@@ -58,6 +58,14 @@ import {
   updateSpreadsheet,
 } from 'feishu-tools';
 import { feishuOpenApiCall } from './openapi';
+import {
+  getBitableApp,
+  listBitableTables,
+  listBitableFields,
+  listBitableRecords,
+  createBitableRecord,
+} from './bitable';
+import { listChats, listMessages, sendMessage } from './im';
 
 /** 全量工具列表 —— 用于 Actions Bridge REST API */
 export const allTools: ToolDefinition[] = [
@@ -112,6 +120,17 @@ export const allTools: ToolDefinition[] = [
   updateSheetProtection,
   updateSheetViewSettings,
   updateSpreadsheet,
+  // 多维表格 (bitable)
+  getBitableApp,
+  listBitableTables,
+  listBitableFields,
+  listBitableRecords,
+  createBitableRecord,
+  // 消息 (im)
+  listChats,
+  listMessages,
+  sendMessage,
+  // 万能调用
   feishuOpenApiCall,
 ];
 
@@ -139,6 +158,15 @@ export const mcpCoreTools: ToolDefinition[] = [
   getSpreadsheet,
   getSheet,
   querySheets,
+  // 多维表格
+  listBitableTables,
+  listBitableFields,
+  listBitableRecords,
+  createBitableRecord,
+  // 消息
+  listChats,
+  listMessages,
+  sendMessage,
   // 万能工具（覆盖所有未列出的 API）
   feishuOpenApiCall,
 ];
