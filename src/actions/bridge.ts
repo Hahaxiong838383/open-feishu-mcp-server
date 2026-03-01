@@ -944,6 +944,19 @@ function correctFeishuPath(path: string): string {
     }
   }
 
+  // 特殊处理：GPT 把 /base/ (bitable) 误当 sheets 用
+  // 检测 sheets 路径里出现 tbl 开头的 segment → 说明应该是 bitable
+  if (correctService === 'sheets' && /\/tbl[A-Za-z0-9]/.test(correctedRest)) {
+    // 从路径中提取 token 和 table 信息
+    // 典型错误路径：/sheets/v2/spreadsheets/{app_token}/tables/tblXXX/...
+    const bitableMatch = correctedRest.match(/spreadsheets\/([^/]+)\/tables\/(tbl[^/]+)(?:\/(.*))?/);
+    if (bitableMatch) {
+      const [, appToken, tableId, remaining] = bitableMatch;
+      const suffix = remaining ? `/${remaining}` : '/records';
+      return `/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}${suffix}`;
+    }
+  }
+
   // 如果 rest 为空，根据服务类型补充默认资源名
   if (!correctedRest) {
     const DEFAULT_RESOURCES: Record<string, string> = {

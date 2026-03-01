@@ -27,11 +27,13 @@
 | 多维表格-查记录 | GET | `/bitable/v1/apps/{app_token}/tables/{table_id}/records` |
 | 多维表格-加记录 | POST | `/bitable/v1/apps/{app_token}/tables/{table_id}/records` |
 
-## 链接解析
+## 链接解析（⚠️ /base/ 是多维表格 bitable，不是 sheets）
 
-- `feishu.cn/base/ABC` → app_token=ABC（多维表格）
-- `feishu.cn/docx/ABC` → document_id=ABC
-- `feishu.cn/wiki/ABC` → token=ABC
+- `feishu.cn/base/ABC` → **多维表格**，app_token=`ABC`，用 `/bitable/v1/apps/ABC/tables`
+- `feishu.cn/base/ABC?table=tblXXX` → 已知 table_id=`tblXXX`，直接用 `/bitable/v1/apps/ABC/tables/tblXXX/records`
+- `feishu.cn/docx/ABC` → 文档，document_id=`ABC`
+- `feishu.cn/sheets/ABC` → **电子表格**（注意：sheets 不是 base）
+- `feishu.cn/wiki/ABC` → 知识库，token=`ABC`
 
 ## 错误处理
 
