@@ -913,25 +913,41 @@ export async function handleActionsOpenApi(
     '/open-apis/user/v1/info': '/open-apis/authen/v1/user_info',
     '/open-apis/users/me': '/open-apis/authen/v1/user_info',
     '/open-apis/me': '/open-apis/authen/v1/user_info',
+    '/open-apis/user/info': '/open-apis/authen/v1/user_info',
+    '/open-apis/account/info': '/open-apis/authen/v1/user_info',
+    '/open-apis/auth/user_info': '/open-apis/authen/v1/user_info',
     // 知识库
     '/open-apis/knowledge/v1/spaces': '/open-apis/wiki/v2/spaces',
     '/open-apis/knowledge/v2/spaces': '/open-apis/wiki/v2/spaces',
     '/open-apis/wiki/v1/spaces': '/open-apis/wiki/v2/spaces',
     '/open-apis/spaces': '/open-apis/wiki/v2/spaces',
-    // 文档
+    // 文档 — GPT 常用 documents/doc/docs 而非 docx
     '/open-apis/docs/v1/documents': '/open-apis/docx/v1/documents',
     '/open-apis/document/v1/documents': '/open-apis/docx/v1/documents',
+    '/open-apis/documents/v1/documents': '/open-apis/docx/v1/documents',
+    '/open-apis/documents/v1/create': '/open-apis/docx/v1/documents',
+    '/open-apis/document/v1/create': '/open-apis/docx/v1/documents',
+    '/open-apis/docs/v1/create': '/open-apis/docx/v1/documents',
+    '/open-apis/doc/v1/documents': '/open-apis/docx/v1/documents',
+    '/open-apis/doc/v1/create': '/open-apis/docx/v1/documents',
     // 消息
     '/open-apis/messages/v1/messages': '/open-apis/im/v1/messages',
     '/open-apis/message/v1/messages': '/open-apis/im/v1/messages',
     '/open-apis/chat/v1/chats': '/open-apis/im/v1/chats',
     '/open-apis/chats': '/open-apis/im/v1/chats',
+    '/open-apis/chat/v1/messages': '/open-apis/im/v1/messages',
     // 表格
     '/open-apis/spreadsheet/v3/spreadsheets': '/open-apis/sheets/v3/spreadsheets',
     '/open-apis/sheet/v3/spreadsheets': '/open-apis/sheets/v3/spreadsheets',
+    '/open-apis/spreadsheets/v3/spreadsheets': '/open-apis/sheets/v3/spreadsheets',
     // 多维表格
     '/open-apis/base/v1/apps': '/open-apis/bitable/v1/apps',
     '/open-apis/table/v1/apps': '/open-apis/bitable/v1/apps',
+    '/open-apis/tables/v1/apps': '/open-apis/bitable/v1/apps',
+    // 任务
+    '/open-apis/tasks/v2/tasks': '/open-apis/task/v2/tasks',
+    '/open-apis/todo/v2/tasks': '/open-apis/task/v2/tasks',
+    '/open-apis/todos/v2/tasks': '/open-apis/task/v2/tasks',
   };
   // 精确匹配纠错
   if (PATH_CORRECTIONS[normalizedPath]) {
@@ -943,20 +959,38 @@ export async function handleActionsOpenApi(
       ['/open-apis/knowledge/v2/', '/open-apis/wiki/v2/'],
       ['/open-apis/wiki/v1/', '/open-apis/wiki/v2/'],
       ['/open-apis/docs/v1/', '/open-apis/docx/v1/'],
+      ['/open-apis/doc/v1/', '/open-apis/docx/v1/'],
       ['/open-apis/document/v1/', '/open-apis/docx/v1/'],
+      ['/open-apis/documents/v1/', '/open-apis/docx/v1/'],
       ['/open-apis/messages/v1/', '/open-apis/im/v1/'],
       ['/open-apis/message/v1/', '/open-apis/im/v1/'],
       ['/open-apis/chat/v1/', '/open-apis/im/v1/'],
       ['/open-apis/spreadsheet/v3/', '/open-apis/sheets/v3/'],
+      ['/open-apis/spreadsheets/v3/', '/open-apis/sheets/v3/'],
       ['/open-apis/sheet/v3/', '/open-apis/sheets/v3/'],
       ['/open-apis/base/v1/', '/open-apis/bitable/v1/'],
       ['/open-apis/table/v1/', '/open-apis/bitable/v1/'],
+      ['/open-apis/tables/v1/', '/open-apis/bitable/v1/'],
+      ['/open-apis/tasks/v2/', '/open-apis/task/v2/'],
+      ['/open-apis/todo/v2/', '/open-apis/task/v2/'],
+      ['/open-apis/todos/v2/', '/open-apis/task/v2/'],
     ];
     for (const [wrong, correct] of PREFIX_CORRECTIONS) {
       if (normalizedPath.startsWith(wrong)) {
         normalizedPath = correct + normalizedPath.slice(wrong.length);
         break;
       }
+    }
+    // 前缀替换后二次精确匹配（如 /documents/v1/create → /docx/v1/create → 需要再纠正为 /docx/v1/documents）
+    const POST_PREFIX_CORRECTIONS: Record<string, string> = {
+      '/open-apis/docx/v1/create': '/open-apis/docx/v1/documents',
+      '/open-apis/im/v1/send': '/open-apis/im/v1/messages',
+      '/open-apis/sheets/v3/create': '/open-apis/sheets/v3/spreadsheets',
+      '/open-apis/bitable/v1/create': '/open-apis/bitable/v1/apps',
+      '/open-apis/task/v2/create': '/open-apis/task/v2/tasks',
+    };
+    if (POST_PREFIX_CORRECTIONS[normalizedPath]) {
+      normalizedPath = POST_PREFIX_CORRECTIONS[normalizedPath];
     }
   }
 
