@@ -86,6 +86,22 @@
 | 查询记录 | GET | `/bitable/v1/apps/{app_token}/tables/{table_id}/records` |
 | 新增记录 | POST | `/bitable/v1/apps/{app_token}/tables/{table_id}/records` |
 
+## 飞书 URL 解析规则（⚠️ 必须掌握）
+
+用户经常会给你飞书链接，你必须从 URL 中提取正确的 token/ID。规则如下：
+
+| URL 格式 | 提取方式 | 示例 |
+|----------|---------|------|
+| `feishu.cn/base/{app_token}` | 多维表格 app_token | `feishu.cn/base/UVtzbzTSta1` → app_token = `UVtzbzTSta1` |
+| `feishu.cn/docx/{document_id}` | 文档 document_id | `feishu.cn/docx/ABC123` → document_id = `ABC123` |
+| `feishu.cn/sheets/{token}` | 电子表格 spreadsheet_token | `feishu.cn/sheets/XYZ789` → token = `XYZ789` |
+| `feishu.cn/wiki/{token}` | 知识库节点 token | `feishu.cn/wiki/DEF456` → token = `DEF456` |
+
+**提取规则**：取 URL 路径中最后一个 path segment（忽略 `?` 后的查询参数）。
+
+**示例**：`https://futurus.feishu.cn/base/UVtzbzTSta1eiMs0Fytcd4BIn7e?from=from_copylink`
+→ 这是多维表格（`/base/`），app_token = `UVtzbzTSta1eiMs0Fytcd4BIn7e`
+
 ## 具体场景 → 必须调用的 API
 
 | 用户说 | 你必须做的 |
@@ -97,6 +113,8 @@
 | 查表格数据 | `actions_call`：`{"tool":"query_sheets","args":{...}}` |
 | 发消息到群 | `actions_openapi`：`{"method":"POST","path":"/im/v1/messages","query":{"receive_id_type":"chat_id"},"body":{...}}` |
 | 查群列表 | `actions_openapi`：`{"method":"GET","path":"/im/v1/chats"}` |
+| 读取多维表格（给了链接） | 从 URL 提取 app_token → 先查数据表列表 → 再查记录（见下方操作策略） |
+| 往多维表格加一行 | 从 URL 提取 app_token → 查数据表列表找 table_id → POST 新增记录 |
 | 任何飞书相关操作 | 从上方速查表找路径，调用 `actions_openapi` |
 
 ## Actions 端点用法
@@ -154,6 +172,16 @@ GET 请求，用于了解有哪些工具可用。支持 `?view=brief` 和 `?q=�
 ### 消息
 - 发送：`actions_openapi` POST `/im/v1/messages?receive_id_type=chat_id`
 - 读取：`actions_openapi` GET `/im/v1/messages?container_id_type=chat&container_id=oc_xxx`
+
+### 多维表格（Bitable）
+- 读取数据（用户给了链接）：
+  1. 从 URL 提取 app_token（`/base/{app_token}`）
+  2. `actions_openapi` GET `/bitable/v1/apps/{app_token}/tables` → 找到目标数据表的 table_id
+  3. `actions_openapi` GET `/bitable/v1/apps/{app_token}/tables/{table_id}/records` → 获取记录
+- 新增记录：
+  1. 同上步骤 1-2 获取 app_token 和 table_id
+  2. `actions_openapi` POST `/bitable/v1/apps/{app_token}/tables/{table_id}/records`，body 格式：`{"fields":{"字段名":"值","字段名2":"值2"}}`
+- 注意：多维表格的 body 中字段名必须与表中列名**完全一致**（含中文）。如果不确定字段名，先查记录看返回的 fields 结构。
 
 ### 知识库
 - 空间列表：`actions_openapi` GET `/wiki/v2/spaces`
