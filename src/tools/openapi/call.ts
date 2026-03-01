@@ -135,7 +135,6 @@ export const feishuOpenApiCall: ToolDefinition = {
       }
 
       const headers: Record<string, string> = {
-        Authorization: `Bearer ${token}`,
         ...args.headers,
       };
 
@@ -212,11 +211,21 @@ export const feishuOpenApiCall: ToolDefinition = {
         }
       }
 
-      const response = await fetch(url.toString(), {
-        method: args.method,
-        headers,
-        body,
-      });
+      const doFetch = async (currentToken: string) => {
+        const h = { ...headers, Authorization: `Bearer ${currentToken}` };
+        return fetch(url.toString(), { method: args.method, headers: h, body });
+      };
+
+      let response = await doFetch(token);
+
+      // 401 或飞书 token 过期 code → 重新获取 token 重试一次
+      if (response.status === 401) {
+        console.log('[feishu_openapi_call] 收到 401，自动重试...');
+        const retryToken = await resolveToken(context.getUserAccessToken);
+        if (retryToken && retryToken !== token) {
+          response = await doFetch(retryToken);
+        }
+      }
 
       const responseHeaders = headersToObject(response.headers);
       const responseMode = args.responseMode || 'json';
@@ -235,6 +244,39 @@ export const feishuOpenApiCall: ToolDefinition = {
       } else {
         const responseText = await response.text();
         const data = responseMode === 'text' ? responseText : safeJsonParse(responseText);
+
+        // 检查飞书 token 过期 code（200 但 code=99991663/99991664）
+        if (
+          response.ok &&
+          data && typeof data === 'object' && !Array.isArray(data) &&
+          typeof (data as any).code === 'number' &&
+          ((data as any).code === 99991663 || (data as any).code === 99991664)
+        ) {
+          console.log('[feishu_openapi_call] 飞书返回 token 过期 code:', (data as any).code, '，自动重试...');
+          const retryToken = await resolveToken(context.getUserAccessToken);
+          if (retryToken && retryToken !== token) {
+            const retryResp = await doFetch(retryToken);
+            const retryText = await retryResp.text();
+            const retryData = responseMode === 'text' ? retryText : safeJsonParse(retryText);
+            if (!retryResp.ok) {
+              payload = {
+                ok: false, status: retryResp.status,
+                headers: headersToObject(retryResp.headers),
+                error: { message: `飞书 OpenAPI 请求失败（HTTP ${retryResp.status}）`, raw: retryData },
+              };
+            } else {
+              payload = {
+                ok: true, status: retryResp.status,
+                headers: headersToObject(retryResp.headers),
+                data: retryData,
+              };
+            }
+            return {
+              content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+              isError: !retryResp.ok,
+            };
+          }
+        }
 
         if (!response.ok) {
           payload = {
