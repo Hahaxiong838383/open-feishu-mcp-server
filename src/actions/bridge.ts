@@ -899,12 +899,30 @@ function correctFeishuPath(path: string): string {
 
   if (EXACT[path]) return EXACT[path];
 
-  // 正则提取：/open-apis/{service}/v{N}/{rest}
-  const match = path.match(/^\/open-apis\/([^/]+)\/v(\d+)\/(.*)$/);
-  if (!match) return path;
+  let service: string | undefined;
+  let rest: string;
 
-  const [, service, _version, rest] = match;
-  const alias = SERVICE_ALIASES[service];
+  // 模式1：/open-apis/{service}/v{N}/{rest}  （标准格式，如 /doc/v2/create）
+  const match1 = path.match(/^\/open-apis\/([^/]+)\/v\d+\/(.*)$/);
+  // 模式2：/open-apis/v{N}/{service}/{rest}  （版本在前，如 /v2/docs）
+  const match2 = path.match(/^\/open-apis\/v\d+\/([^/]+)(?:\/(.*))?$/);
+  // 模式3：/open-apis/{service}/{rest}        （无版本号，如 /docs/create）
+  const match3 = path.match(/^\/open-apis\/([^/]+)(?:\/(.*))?$/);
+
+  if (match1) {
+    service = match1[1];
+    rest = match1[2] || '';
+  } else if (match2) {
+    service = match2[1];
+    rest = match2[2] || '';
+  } else if (match3 && SERVICE_ALIASES[match3[1]]) {
+    service = match3[1];
+    rest = match3[2] || '';
+  } else {
+    return path;
+  }
+
+  const alias = SERVICE_ALIASES[service!];
   if (!alias) return path; // 不认识的服务名，不纠错
 
   const [correctService, correctVersion] = alias;
@@ -913,18 +931,30 @@ function correctFeishuPath(path: string): string {
   // 动作纠错：/docx/v1/create → /docx/v1/documents
   const actionMap = ACTION_TO_RESOURCE[correctService];
   if (actionMap) {
-    // 检查 rest 是否是一个已知的动作别名（如 "create"）
-    const firstSegment = rest.split('/')[0];
+    const firstSegment = correctedRest.split('/')[0];
     if (actionMap[firstSegment]) {
-      correctedRest = actionMap[firstSegment] + rest.slice(firstSegment.length);
+      correctedRest = actionMap[firstSegment] + correctedRest.slice(firstSegment.length);
     }
   }
 
   // 特殊处理：contact/v3/users/me → authen/v1/user_info
   if (correctService === 'authen') {
-    if (correctedRest.startsWith('users/me') || correctedRest === 'user_info' || correctedRest === 'info') {
+    if (correctedRest.startsWith('users/me') || correctedRest === 'user_info' || correctedRest === 'info' || correctedRest === '') {
       return '/open-apis/authen/v1/user_info';
     }
+  }
+
+  // 如果 rest 为空，根据服务类型补充默认资源名
+  if (!correctedRest) {
+    const DEFAULT_RESOURCES: Record<string, string> = {
+      docx: 'documents',
+      wiki: 'spaces',
+      im: 'messages',
+      sheets: 'spreadsheets',
+      bitable: 'apps',
+      task: 'tasks',
+    };
+    correctedRest = DEFAULT_RESOURCES[correctService] || '';
   }
 
   return `/open-apis/${correctService}/${correctVersion}/${correctedRest}`;
