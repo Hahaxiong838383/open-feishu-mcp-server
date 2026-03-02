@@ -66,6 +66,7 @@ import {
   createBitableRecord,
 } from './bitable';
 import { listChats, listMessages, sendMessage } from './im';
+import { readWhiteboardText } from './whiteboard';
 
 /** 全量工具列表 —— 用于 Actions Bridge REST API */
 export const allTools: ToolDefinition[] = [
@@ -130,6 +131,8 @@ export const allTools: ToolDefinition[] = [
   listChats,
   listMessages,
   sendMessage,
+  // 画板 (whiteboard)
+  readWhiteboardText,
   // 万能调用
   feishuOpenApiCall,
 ];
@@ -167,6 +170,8 @@ export const mcpCoreTools: ToolDefinition[] = [
   listChats,
   listMessages,
   sendMessage,
+  // 画板
+  readWhiteboardText,
   // 万能工具（覆盖所有未列出的 API）
   feishuOpenApiCall,
 ];

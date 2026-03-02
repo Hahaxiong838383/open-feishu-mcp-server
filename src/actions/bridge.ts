@@ -201,6 +201,9 @@ const FEISHU_SCOPE = [
   // Tasks
   'task:task',
   'task:task:readonly',
+
+  // Whiteboard (画板)
+  'board:whiteboard:node:read',
 ].join(' ');
 
 const ACTIONS_NEXT_PREFIX = 'ACTIONS_NEXT::';
@@ -230,7 +233,7 @@ export async function handleActionsAuth(request: Request, env: ActionsEnv) {
     client_id: env.FEISHU_APP_ID,
     redirect_uri: callbackUrl.href,
     // scope 与官方 feishu-mcp-server 一致（已验证可用）
-    scope: 'wiki:wiki wiki:wiki:readonly wiki:node:read drive:drive drive:file drive:file:upload auth:user.id:read offline_access task:task:read docs:document:import docs:document.media:upload docx:document docx:document:readonly docx:document.block:convert',
+    scope: 'wiki:wiki wiki:wiki:readonly wiki:node:read drive:drive drive:file drive:file:upload auth:user.id:read offline_access task:task:read docs:document:import docs:document.media:upload docx:document docx:document:readonly docx:document.block:convert board:whiteboard:node:read',
     state,
   });
   return Response.redirect(authorizeUrl, 302);

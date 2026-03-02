@@ -35,7 +35,7 @@ app.get('/.well-known/oauth-protected-resource', async (c) => {
 		// Scopes supported by this resource server
 		scopes_supported: [
 			"drive:drive",
-			"drive:file", 
+			"drive:file",
 			"drive:file:upload",
 			"auth:user.id:read",
 			"offline_access",
@@ -43,7 +43,8 @@ app.get('/.well-known/oauth-protected-resource', async (c) => {
 			"docs:document:import",
 			"docs:document.media:upload",
 			"docx:document",
-			"docx:document:readonly"
+			"docx:document:readonly",
+			"board:whiteboard:node:read"
 		],
 		
 		// Bearer token usage
@@ -99,7 +100,7 @@ async function redirectToFeishu(request: Request, oauthReqInfo: AuthRequest, hea
 			...headers,
 			location: getUpstreamAuthorizeUrl({
 				upstream_url: 'https://open.feishu.cn/open-apis/authen/v1/authorize',
-				scope: 'wiki:wiki wiki:wiki:readonly wiki:node:read drive:drive drive:file drive:file:upload auth:user.id:read offline_access task:task:read docs:document:import docs:document.media:upload docx:document docx:document:readonly docx:document.block:convert',
+				scope: 'wiki:wiki wiki:wiki:readonly wiki:node:read drive:drive drive:file drive:file:upload auth:user.id:read offline_access task:task:read docs:document:import docs:document.media:upload docx:document docx:document:readonly docx:document.block:convert board:whiteboard:node:read',
 				client_id: env.FEISHU_APP_ID,
 				redirect_uri: new URL('/callback', request.url).href,
 				state: btoa(JSON.stringify(oauthReqInfo)),
