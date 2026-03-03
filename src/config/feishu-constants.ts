@@ -47,7 +47,7 @@ export const FEISHU_SCOPE = [
   // Contacts / user info
   'auth:user.id:read',
   'contact:user.base:readonly',
-  'contact:contact:readonly',
+  // 'contact:contact:readonly',  // 20027：需在应用后台单独开通
 
   // IM (bot/messages)
   'im:message',
@@ -71,18 +71,15 @@ export const FEISHU_SCOPE = [
   'wiki:wiki',
   'wiki:wiki:readonly',
   'wiki:node:read',
-  'wiki:space',
-  'wiki:space:readonly',
-  'wiki:node',
-  'wiki:node:readonly',
+  // wiki:space / wiki:node 等名称不存在于飞书 OAuth（20043），
+  // wiki:wiki + wiki:node:read 已覆盖知识库读写权限
 
   // Bitable / Base (多维表格)
+  // bitable:app + bitable:app:readonly 已覆盖多维表格读写
+  // bitable:record:write / bitable:record:readonly / base:record:write 名称不存在（20043）
   'bitable:app',
   'bitable:app:readonly',
-  'bitable:record:write',
-  'bitable:record:readonly',
   'base:field:read',
-  'base:record:write',
   'base:record:read',
 
   // Tasks

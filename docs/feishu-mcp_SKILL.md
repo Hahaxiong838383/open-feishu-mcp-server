@@ -133,3 +133,58 @@ path 无需加 `/open-apis/` 前缀，后端自动补。
 | 401 | 未授权或 token 过期 | 提示用户重新授权（Sign in） |
 | 404 | 路径错误 | 检查 path 是否正确 |
 | 403 | 无权限 | 提示用户在飞书后台给应用授权 |
+
+---
+
+## 飞书 OAuth Scope 踩坑记录
+
+### OAuth 错误码速查
+
+| 错误码 | 含义 | 解法 |
+|--------|------|------|
+| 20043 | scope 名称不存在 | 该 scope 在飞书 OAuth 系统中根本不存在，必须删除 |
+| 20027 | scope 对应的权限未在应用后台开通 | 去飞书开放平台 → 应用 → 权限管理 → 申请开通 |
+| 20029 | redirect_uri 不合法 | 在飞书开放平台 → 安全设置 → 重定向 URL 中添加回调地址 |
+
+> **关键区分**：20043 是 scope **名称**本身无效（删掉就好），20027 是 scope 名称有效但**权限没开通**（去后台开通）。
+
+### 不存在的 Scope 名称（20043）
+
+以下 scope 名称**不存在**于飞书 OAuth 系统，不要使用：
+
+| 无效名称 | 替代方案 |
+|----------|----------|
+| `bitable:record:write` | `bitable:app` 已覆盖 |
+| `bitable:record:readonly` | `bitable:app:readonly` 已覆盖 |
+| `base:record:write` | `bitable:app` 已覆盖 |
+| `wiki:space` | `wiki:wiki` 已覆盖 |
+| `wiki:space:readonly` | `wiki:wiki:readonly` 已覆盖 |
+| `wiki:node` | `wiki:node:read` 已覆盖 |
+| `wiki:node:readonly` | `wiki:node:read` 已覆盖 |
+| `contact:contact:readonly` | 不存在，需单独使用 `contact:user.base:readonly` |
+
+### Scope 覆盖关系
+
+- **多维表格**：`bitable:app` + `bitable:app:readonly` 已覆盖全部 bitable 读写
+- **知识库**：`wiki:wiki` + `wiki:wiki:readonly` + `wiki:node:read` 已覆盖知识库读写
+- **不要猜 scope 名称**：并非所有 `resource:action` 格式都有效，必须以飞书官方文档为准
+
+---
+
+## 已知 API 限制
+
+### 多维表格评论
+
+飞书 OpenAPI **不支持**读取多维表格（bitable）的评论。
+
+- `list_file_comments`（Drive 评论 API）仅支持 `doc/docx/sheet/file/slides`，不支持 `bitable`
+- 飞书没有专门的 bitable record comments API
+- 如需读取多维表格评论，只能通过飞书 Web 界面手动查看
+
+### 部署注意
+
+本项目同一份代码部署为两个 Cloudflare Worker：
+- `feishu-mcp-server-v2`：正式环境
+- `feishu-mcp-full`：完整功能环境
+
+两者使用不同的飞书应用凭据，但工具集完全一致（61 个工具）。修改代码后需同时部署两个 Worker。
