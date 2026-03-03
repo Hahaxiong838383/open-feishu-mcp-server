@@ -5,6 +5,7 @@ import {
   fetchUpstreamAuthToken,
   refreshUpstreamAuthToken,
 } from '../utils';
+import { FEISHU_SCOPE } from '../config/feishu-constants';
 
 /**
  * Actions Bridge — 把 MCP tools 以普通 REST API 形式暴露出来。
@@ -162,49 +163,7 @@ async function resolveAndRefresh(
 
 // ── 飞书 Auth 端点 ──
 
-// OAuth scope：空格分隔，包含 offline_access 以支持 refresh_token
-// 若飞书提示某项 scope 无效，去应用后台申请/开通或从此处移除
-const FEISHU_SCOPE = [
-  'offline_access',
-
-  // Contacts / user info
-  'contact:user.base:readonly',
-  'contact:contact:readonly',
-
-  // IM (bot/messages)
-  'im:message',
-  'im:message:readonly',
-  'im:chat',
-  'im:chat:readonly',
-
-  // Drive / Docs / Sheets
-  'drive:drive',
-  'drive:drive:readonly',
-  'drive:file',
-  'drive:file:readonly',
-
-  // Wiki
-  'wiki:space',
-  'wiki:space:readonly',
-  'wiki:node',
-  'wiki:node:readonly',
-
-  // Bitable / Base (多维表格)
-  'bitable:app',
-  'bitable:app:readonly',
-  'bitable:record:write',
-  'bitable:record:readonly',
-  'base:field:read',
-  'base:record:write',
-  'base:record:read',
-
-  // Tasks
-  'task:task',
-  'task:task:readonly',
-
-  // Whiteboard (画板)
-  'board:whiteboard:node:read',
-].join(' ');
+// OAuth scope 已提取到 config/feishu-constants.ts 统一管理
 
 const ACTIONS_NEXT_PREFIX = 'ACTIONS_NEXT::';
 
@@ -232,8 +191,7 @@ export async function handleActionsAuth(request: Request, env: ActionsEnv) {
     upstream_url: 'https://open.feishu.cn/open-apis/authen/v1/authorize',
     client_id: env.FEISHU_APP_ID,
     redirect_uri: callbackUrl.href,
-    // scope 与官方 feishu-mcp-server 一致（已验证可用）
-    scope: 'wiki:wiki wiki:wiki:readonly wiki:node:read drive:drive drive:file drive:file:upload auth:user.id:read offline_access task:task:read docs:document:import docs:document.media:upload docx:document docx:document:readonly docx:document.block:convert board:whiteboard:node:read',
+    scope: FEISHU_SCOPE,
     state,
   });
   return Response.redirect(authorizeUrl, 302);

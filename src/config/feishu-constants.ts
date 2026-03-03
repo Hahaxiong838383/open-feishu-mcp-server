@@ -34,4 +34,62 @@ export const FEISHU_CONSTANTS = {
   } as const,
 } as const;
 
-export type FeishuTheme = keyof typeof FEISHU_CONSTANTS.THEMES 
+export type FeishuTheme = keyof typeof FEISHU_CONSTANTS.THEMES
+
+/**
+ * 飞书 OAuth 授权 scope（空格分隔）。
+ * 所有 OAuth 路径（MCP SSE / Actions Bridge）统一使用此常量，
+ * 避免硬编码不一致导致功能缺失。
+ */
+export const FEISHU_SCOPE = [
+  'offline_access',
+
+  // Contacts / user info
+  'auth:user.id:read',
+  'contact:user.base:readonly',
+  'contact:contact:readonly',
+
+  // IM (bot/messages)
+  'im:message',
+  'im:message:readonly',
+  'im:chat',
+  'im:chat:readonly',
+
+  // Drive / Docs / Sheets
+  'drive:drive',
+  'drive:drive:readonly',
+  'drive:file',
+  'drive:file:readonly',
+  'drive:file:upload',
+  'docs:document:import',
+  'docs:document.media:upload',
+  'docx:document',
+  'docx:document:readonly',
+  'docx:document.block:convert',
+
+  // Wiki
+  'wiki:wiki',
+  'wiki:wiki:readonly',
+  'wiki:node:read',
+  'wiki:space',
+  'wiki:space:readonly',
+  'wiki:node',
+  'wiki:node:readonly',
+
+  // Bitable / Base (多维表格)
+  'bitable:app',
+  'bitable:app:readonly',
+  'bitable:record:write',
+  'bitable:record:readonly',
+  'base:field:read',
+  'base:record:write',
+  'base:record:read',
+
+  // Tasks
+  'task:task',
+  'task:task:readonly',
+  'task:task:read',
+
+  // Whiteboard (画板)
+  'board:whiteboard:node:read',
+].join(' ');
