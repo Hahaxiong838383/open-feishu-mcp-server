@@ -1,12 +1,17 @@
 {
-  "name": "remote-mcp-github-oauth",
-  "version": "0.0.1",
+  "name": "feishu-mcp",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "feishu-mcp": "./dist/local.js"
+  },
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "start": "wrangler dev",
+    "build:local": "tsup",
+    "local": "tsx src/local.ts",
     "cf-typegen": "wrangler types",
     "test": "jest",
     "lint": "eslint src/**/*.{ts,tsx}",
@@ -15,15 +20,16 @@
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.56.1",
+    "@modelcontextprotocol/sdk": "^1.25.2",
     "ai": "^6.0.105",
     "dotenv": "^17.2.3",
     "feishu-tools": "^0.1.16",
+    "zod": "^4.3.5",
     "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
     "@cloudflare/workers-oauth-provider": "^0.0.5",
     "@eslint/js": "^9.31.0",
-    "@modelcontextprotocol/sdk": "^1.25.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.1.0",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
@@ -43,8 +49,9 @@
     "prettier": "^3.6.2",
     "ts-jest": "^29.4.0",
     "typescript": "^5.8.4",
+    "tsup": "^8.5.0",
+    "tsx": "^4.19.0",
     "workers-mcp": "0.1.0-3",
-    "wrangler": "^4.59.2",
-    "zod": "^4.3.5"
+    "wrangler": "^4.59.2"
   }
 }
