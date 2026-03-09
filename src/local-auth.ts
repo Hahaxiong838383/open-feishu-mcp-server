@@ -202,12 +202,29 @@ export function createTokenGetter(config: AuthConfig, initialToken: StoredToken)
     }
 
     // 文件 token 也过期，调用 API 刷新
+    // 关键：用文件中的 refreshToken（可能比内存中的更新，HealthMonitor 可能已刷新过）
+    if (fromFile && fromFile.refreshToken) {
+      current = { ...current, refreshToken: fromFile.refreshToken };
+    }
+
     // 避免并发刷新
     if (refreshing) return refreshing;
 
     refreshing = (async () => {
-      current = await doRefresh(current, config);
-      return current.accessToken;
+      try {
+        current = await doRefresh(current, config);
+        return current.accessToken;
+      } catch (refreshErr) {
+        // 刷新失败 → 可能另一个进程（HealthMonitor / 另一个 MCP 实例）已经刷新了
+        // 再读一次文件，如果有效就用它（竞态恢复）
+        const retryFromFile = loadToken(config.appId);
+        if (retryFromFile && isTokenValid(retryFromFile)) {
+          current = retryFromFile;
+          console.error('[feishu-mcp] 刷新失败但文件中有有效 token（另一进程已刷新），已恢复');
+          return current.accessToken;
+        }
+        throw refreshErr;
+      }
     })();
 
     try {

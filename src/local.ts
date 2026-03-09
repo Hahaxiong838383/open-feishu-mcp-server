@@ -10,6 +10,15 @@
  *   FEISHU_APP_SECRET   飞书应用密钥
  */
 import 'dotenv/config';
+
+// 飞书是国内服务，不走代理（避免 HTTP 代理发 plain HTTP 到 HTTPS 端口 → 400）
+const noProxy = process.env.NO_PROXY || process.env.no_proxy || '';
+if (!noProxy.includes('feishu.cn')) {
+  const updated = [noProxy, '*.feishu.cn', '*.larksuite.com'].filter(Boolean).join(',');
+  process.env.NO_PROXY = updated;
+  process.env.no_proxy = updated;
+}
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Client } from '@larksuiteoapi/node-sdk';
