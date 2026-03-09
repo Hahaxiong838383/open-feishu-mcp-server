@@ -59,6 +59,13 @@ function parseArgs() {
 async function main() {
   const config = parseArgs();
 
+  // ★ 保护 stdout：飞书 SDK 的 logger 默认用 console.log 输出到 stdout，
+  // 会污染 MCP stdio 协议流导致 codex 等客户端握手失败。
+  // 将 console.log 重定向到 stderr，确保 stdout 只有 JSON-RPC 消息。
+  const _origLog = console.log;
+  console.log = (...args: unknown[]) => console.error('[sdk]', ...args);
+  console.info = (...args: unknown[]) => console.error('[sdk]', ...args);
+
   // 1. OAuth 授权（首次弹浏览器，后续自动刷新）
   console.error('[feishu-mcp] 正在检查飞书授权...');
   const token = await ensureAuth(config);

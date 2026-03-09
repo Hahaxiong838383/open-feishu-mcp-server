@@ -176,8 +176,13 @@ export async function ensureAuth(config: AuthConfig): Promise<StoredToken> {
 }
 
 /**
- * 创建 token 获取函数（支持自动刷新）
+ * 创建 token 获取函数（支持自动刷新 + 文件热加载）
  * 返回一个 () => Promise<string>，每次调用时检查是否需要刷新
+ *
+ * 刷新优先级：
+ * 1. 内存 token 有效 → 直接返回
+ * 2. 内存 token 过期 → 先检查文件（HealthMonitor 可能已刷新）
+ * 3. 文件 token 也过期 → 调用 API 刷新
  */
 export function createTokenGetter(config: AuthConfig, initialToken: StoredToken) {
   let current = initialToken;
@@ -188,6 +193,15 @@ export function createTokenGetter(config: AuthConfig, initialToken: StoredToken)
       return current.accessToken;
     }
 
+    // 内存 token 过期，先检查文件（HealthMonitor 可能已通过写文件刷新了 token）
+    const fromFile = loadToken(config.appId);
+    if (fromFile && isTokenValid(fromFile)) {
+      current = fromFile;
+      console.error('[feishu-mcp] 从文件热加载了更新的 token');
+      return current.accessToken;
+    }
+
+    // 文件 token 也过期，调用 API 刷新
     // 避免并发刷新
     if (refreshing) return refreshing;
 
